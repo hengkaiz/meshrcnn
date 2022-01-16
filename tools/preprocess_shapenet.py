@@ -109,11 +109,12 @@ def main(args):
 
     # Walk the directory tree to find synset IDs and model IDs
     num_skipped = 0
-    for sid in os.listdir(args.r2n2_dir):
+    num_total = len(os.listdir(args.r2n2_dir))
+    for idx, sid in enumerate(os.listdir(args.r2n2_dir)):
         sid_dir = os.path.join(args.r2n2_dir, sid)
         if not os.path.isdir(sid_dir):
             continue
-        logger.info('Starting synset "%s"' % sid)
+        logger.info('Starting synset "%s" - %d of %d' % (sid, idx + 1, num_total))
         cur_mids = os.listdir(sid_dir)
         N = len(cur_mids)
         if args.models_per_synset > 0:
@@ -140,6 +141,7 @@ def main(args):
     # check that the pre processing completed successfully
     logger.info("Checking validity...")
     splits = json.load(open(args.splits_file, "r"))
+
     if not validcheck(summary, splits):
         raise ValueError("Pre processing identified missing data points")
 
