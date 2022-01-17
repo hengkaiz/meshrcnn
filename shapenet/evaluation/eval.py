@@ -52,12 +52,23 @@ def evaluate_test(model, data_loader, vis_preds=False):
     for batch in data_loader:
         batch = data_loader.postprocess(batch, device)
         imgs, meshes_gt, _, _, _, id_strs = batch
+
+        # import time
+        # logger.info('Image information')
+        # logger.info(imgs.shape)
+        # logger.info(imgs)
+        # time.sleep(5)
+
         sids = [id_str.split("-")[0] for id_str in id_strs]
         for sid in sids:
             num_instances[sid] += 1
 
         with inference_context(model):
             voxel_scores, meshes_pred = model(imgs)
+            # logger.info('Mesh information information')
+            # logger.info(len(meshes_pred))
+            # logger.info(meshes_pred[-1][0])
+            # time.sleep(5)
             cur_metrics = compare_meshes(meshes_pred[-1], meshes_gt, reduce=False)
             cur_metrics["verts_per_mesh"] = meshes_pred[-1].num_verts_per_mesh().cpu()
             cur_metrics["faces_per_mesh"] = meshes_pred[-1].num_faces_per_mesh().cpu()

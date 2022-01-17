@@ -316,7 +316,7 @@ def voxelize(voxel_coords, P, V):
 
 if __name__ == "__main__":
     args = parse_args()
-    main(args)
+    # main(args)
     # Zips the output dir. This is needed if the user wants to copy
     # the data over to a cluster or machine for faster io
     if args.zip_output:
