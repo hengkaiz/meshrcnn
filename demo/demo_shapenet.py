@@ -22,6 +22,10 @@ from shapenet.utils.checkpoint import clean_state_dict
 import torchvision.transforms as T
 from PIL import Image
 
+import trimesh
+import pyvista as pv
+import pyacvd
+
 logger = logging.getLogger('demo')
 
 def setup_cfgs(args):
@@ -55,6 +59,25 @@ def get_parser():
         nargs=argparse.REMAINDER,
     )
     return parser
+
+def resample_mesh(mesh, count=2466):
+    pv_mesh = pv.wrap(mesh)
+    logger.info('Original mesh:')
+    print(pv_mesh)
+    
+    clus = pyacvd.Clustering(pv_mesh)
+    clus.subdivide(3)
+    clus.cluster(count)
+
+    # remesh
+    remesh = clus.create_mesh()
+    logger.info('Resampled mesh:\n')
+    print(remesh)
+
+    verts = remesh.points
+    faces = remesh.faces.reshape((-1, 4))[:, 1:]
+    
+    return verts, faces
 
 if __name__ == "__main__":
     mp.set_start_method("spawn", force=True)
@@ -92,13 +115,14 @@ if __name__ == "__main__":
     img = img.to(device)
 
     with inference_context(model):
-        _, meshes_pred = model(img)
+        img_feats, _, meshes_pred = model(img)
 
     verts, faces = meshes_pred[-1].get_mesh_verts_faces(0)
+
+    mesh = trimesh.Trimesh(vertices=verts.cpu().detach().numpy(), faces=faces.cpu().detach().numpy())
+    resampled_verts, resampled_faces = resample_mesh(mesh)
+
+
     save_file = os.path.join(args.output, "%s.obj" % (im_name))
-    save_obj(save_file, verts, faces)
+    save_obj(save_file, torch.from_numpy(resampled_verts), torch.from_numpy(resampled_faces))
     logger.info("Predictions saved in %s" % (save_file))
-
-
-
-

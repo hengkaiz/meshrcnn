@@ -89,7 +89,7 @@ class VoxMeshHead(nn.Module):
 
         cubified_meshes = self.cubify(voxel_scores)
         refined_meshes = self.mesh_head(img_feats, cubified_meshes, P)
-        return voxel_scores, refined_meshes
+        return img_feats, voxel_scores, refined_meshes
 
 
 @MESH_ARCH_REGISTRY.register()
