@@ -53,12 +53,6 @@ def evaluate_test(model, data_loader, vis_preds=False):
         batch = data_loader.postprocess(batch, device)
         imgs, meshes_gt, _, _, _, id_strs = batch
 
-        # import time
-        # logger.info('Image information')
-        # logger.info(imgs.shape)
-        # logger.info(imgs)
-        # time.sleep(5)
-
         sids = [id_str.split("-")[0] for id_str in id_strs]
         for sid in sids:
             num_instances[sid] += 1

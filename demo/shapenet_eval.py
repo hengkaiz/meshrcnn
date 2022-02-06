@@ -98,8 +98,6 @@ if __name__ == "__main__":
     verts = verts[None, :, :]
     faces = faces[None, :, :]
 
-    print('gt')
-    print(verts, faces)
     # # print(verts.size(2), faces.size(2))
     gt_mesh = Meshes(verts=verts, faces=faces)
 
@@ -109,11 +107,9 @@ if __name__ == "__main__":
     pred_faces = pred_faces[None, :, :]
     pred_mesh = Meshes(verts=pred_verts, faces=pred_faces)
 
-    print('pred')
-    print(pred_verts, pred_faces)
-
     cur_metrics = compare_meshes(pred_mesh, gt_mesh, reduce=False)
     cur_metrics["verts_per_mesh"] = pred_mesh.num_verts_per_mesh().cpu()
     cur_metrics["faces_per_mesh"] = pred_mesh.num_faces_per_mesh().cpu()
 
-    print(cur_metrics)
+    for k, v in cur_metrics.items():
+        print(f'{k:<25}: {v.item()}')
