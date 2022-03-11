@@ -10,7 +10,7 @@ import torch.multiprocessing as mp
 from detectron2.utils.collect_env import collect_env_info
 from detectron2.utils.logger import setup_logger
 from fvcore.common.file_io import PathManager
-
+from pathlib import Path
 from pytorch3d.io import save_obj
 
 from shapenet.config.config import get_shapenet_cfg
@@ -20,11 +20,14 @@ from shapenet.modeling.mesh_arch import build_model
 from shapenet.utils.checkpoint import clean_state_dict
 
 import torchvision.transforms as T
+
+import glob
 from PIL import Image
 
 import trimesh
 import pyvista as pv
 import pyacvd
+import numpy as np
 
 logger = logging.getLogger('demo')
 
@@ -43,8 +46,8 @@ def get_parser():
         metavar="FILE",
         help="path to config file",
     )
-    parser.add_argument("--input", help="A path to an input image")
-    parser.add_argument("--output", help="A directory to save output visualizations")
+    parser.add_argument("--input", help="A path to an input main folder")
+    # parser.add_argument("--output", help="A directory to save output visualizations")
     parser.add_argument(
         "--focal-length", type=float, default=20.0, help="Focal length for the image"
     )
@@ -62,8 +65,8 @@ def get_parser():
 
 def resample_mesh(mesh, count=2466):
     pv_mesh = pv.wrap(mesh)
-    logger.info('Original mesh:')
-    print(pv_mesh)
+    # logger.info('Original mesh:')
+    # print(pv_mesh)
     
     clus = pyacvd.Clustering(pv_mesh)
     clus.subdivide(3)
@@ -71,13 +74,11 @@ def resample_mesh(mesh, count=2466):
 
     # remesh
     remesh = clus.create_mesh()
-    logger.info('Resampled mesh:\n')
-    print(remesh)
 
-    verts = remesh.points
-    faces = remesh.faces.reshape((-1, 4))[:, 1:]
+    # verts = remesh.points
+    # faces = remesh.faces.reshape((-1, 4))[:, 1:]
     
-    return verts, faces
+    return remesh
 
 if __name__ == "__main__":
     mp.set_start_method("spawn", force=True)
@@ -101,28 +102,69 @@ if __name__ == "__main__":
     logger.info("Model loaded")
     model.to(device)
 
-    # load image
-    transform = [T.ToTensor()]
-    transform.append(imagenet_preprocess())
-    transform = T.Compose(transform)
-    
-    im_name = args.input.split("/")[-1].split(".")[0]
+    sub_dir = sorted(os.listdir(args.input))
 
-    with PathManager.open(args.input, "rb") as f:
-        img = Image.open(f).convert("RGB")
-    img = transform(img)
-    img = img[None, :, :, :]
-    img = img.to(device)
+    for sd in sub_dir:
+        curr_path = os.path.join(args.input, sd)
+        images = glob.glob(curr_path + "/*.png")
+        
+        for img_dir in images:
+            # load image
+            transform = [T.ToTensor()]
+            transform.append(imagenet_preprocess())
+            transform = T.Compose(transform)
+            
+            im_name = img_dir.split("/")[-1].split(".")[0]
 
-    with inference_context(model):
-        img_feats, _, meshes_pred = model(img)
+            with PathManager.open(img_dir, "rb") as f:
+                img = Image.open(f).convert("RGB")
 
-    verts, faces = meshes_pred[-1].get_mesh_verts_faces(0)
+            img = transform(img)
+            img = img[None, :, :, :]
+            img = img.to(device)
 
-    mesh = trimesh.Trimesh(vertices=verts.cpu().detach().numpy(), faces=faces.cpu().detach().numpy())
-    resampled_verts, resampled_faces = resample_mesh(mesh)
+            with inference_context(model):
+                img_feats, voxel_scores, meshes_pred, P, cubified_meshes = model(img)
 
+            # Save voxel_score
+            voxel_odir = os.path.join(curr_path, "voxel_score")
+            if not Path(voxel_odir).is_dir():
+                os.mkdir(voxel_odir)
 
-    save_file = os.path.join(args.output, "%s.obj" % (im_name))
-    save_obj(save_file, torch.from_numpy(resampled_verts), torch.from_numpy(resampled_faces))
-    logger.info("Predictions saved in %s" % (save_file))
+            voxel_file = os.path.join(voxel_odir, "%s.pt" % (im_name))
+            torch.save(voxel_scores, voxel_file)
+
+            # Save image features
+            imgfeat_odir = os.path.join(curr_path, "img_feat")
+            if not Path(imgfeat_odir).is_dir():
+                os.mkdir(imgfeat_odir)
+
+            img_feat_file = os.path.join(imgfeat_odir, "%s.pt" % (im_name))
+            torch.save(img_feats, img_feat_file)
+
+            # Save P
+            p_odir = os.path.join(curr_path, "P")
+            if not Path(p_odir).is_dir():
+                os.mkdir(p_odir)
+
+            p_file = os.path.join(p_odir, "%s.pt" % (im_name))
+            torch.save(P, p_file)
+
+            # Save cubified mesh
+            cmesh_odir = os.path.join(curr_path, "cube_mesh")
+            if not Path(cmesh_odir).is_dir():
+                os.mkdir(cmesh_odir)
+
+            cube_mesh_file = os.path.join(cmesh_odir, "%s_cube.obj" % (im_name))
+            c_verts, c_faces = cubified_meshes[-1].get_mesh_verts_faces(0)
+            save_obj(cube_mesh_file, c_verts, c_faces)
+
+            # Save predicted mesh
+            mesh_odir = os.path.join(curr_path, "final_mesh")
+            if not Path(mesh_odir).is_dir():
+                os.mkdir(mesh_odir)
+
+            save_file = os.path.join(mesh_odir, "%s.obj" % (im_name))
+            verts, faces = meshes_pred[-1].get_mesh_verts_faces(0)
+            save_obj(save_file, verts, faces)
+            logger.info("Predictions saved for %s/%s" % (curr_path.split('/')[-1], im_name))

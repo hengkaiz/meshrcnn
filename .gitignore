@@ -2,6 +2,7 @@
 output
 output_demo
 datasets
+final_eval_data
 
 *.jpg
 *.png

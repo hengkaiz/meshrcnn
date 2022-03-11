@@ -10,6 +10,9 @@ from shapenet.modeling.backbone import build_backbone
 from shapenet.modeling.heads import MeshRefinementHead, VoxelHead
 from shapenet.utils.coords import get_blender_intrinsic_matrix, voxel_to_world
 
+import tensorflow as tf
+import numpy as np
+
 MESH_ARCH_REGISTRY = Registry("MESH_ARCH")
 
 
@@ -68,29 +71,79 @@ class VoxMeshHead(nn.Module):
         faces_list = meshes.faces_list()
         for i in range(N):
             if faces_list[i].shape[0] == 0:
-                # print('Adding dummmy mesh at index ', i)
                 vv, ff = dummies.get_mesh(i)
                 verts_list[i] = vv
                 faces_list[i] = ff
         return Meshes(verts=verts_list, faces=faces_list)
 
-    def forward(self, imgs, voxel_only=False):
+    def forward(self, imgs, voxel_only=False, combine=False, camera=None, cimg_feats=None, fmesh=None, cP=None, vox=None):
+        if combine:
+            # cubified_meshes = self.cubify(vox)
+            refined_meshes = self.mesh_head(cimg_feats, fmesh, cP)
+
+            return refined_meshes
+            # return cubified_meshes
+        
         N = imgs.shape[0]
         device = imgs.device
 
         img_feats = self.backbone(imgs)
         voxel_scores = self.voxel_head(img_feats[-1])
         P = self._get_projection_matrix(N, device)
-
+        
         if voxel_only:
             dummy_meshes = self._dummy_mesh(N, device)
             dummy_refined = self.mesh_head(img_feats, dummy_meshes, P)
+
+            print('yessir:', len(voxel_scores), len(dummy_refined))
             return voxel_scores, dummy_refined
 
         cubified_meshes = self.cubify(voxel_scores)
         refined_meshes = self.mesh_head(img_feats, cubified_meshes, P)
-        return img_feats, voxel_scores, refined_meshes
+        return img_feats, voxel_scores, refined_meshes, P, cubified_meshes
 
+# cameras
+# azimuth, elevation, in-plane rotation, distance, field of view.
+
+def normal(v):
+    norm = tf.norm(v)
+    if norm == 0:
+        return v
+    return tf.divide(v, norm)
+
+def cameraMat(param):
+    theta = param[0] * np.pi / 180.0
+    camy = param[3] * tf.sin(param[1] * np.pi / 180.0)
+    lens = param[3] * tf.cos(param[1] * np.pi / 180.0)
+    camx = lens * tf.cos(theta)
+    camz = lens * tf.sin(theta)
+    Z = tf.stack([camx, camy, camz])
+
+    x = camy * tf.cos(theta + np.pi)
+    z = camy * tf.sin(theta + np.pi)
+    Y = tf.stack([x, lens, z])
+    X = tf.linalg.cross(Y, Z)
+
+    cm_mat = tf.stack([normal(X), normal(Y), normal(Z)])
+    return cm_mat, Z
+
+def camera_trans_inv(camera_metadata, xyz):
+    c, o = cameraMat(camera_metadata)
+    inv_xyz = (tf.matmul(xyz, tf.linalg.inv(tf.transpose(c)))) + o
+    return inv_xyz
+
+def camera_trans(camera_metadata, xyz):
+    c, o = cameraMat(camera_metadata)
+    points = xyz[:, :]
+    pt_trans = points - o
+    pt_trans = tf.matmul(pt_trans, tf.transpose(c))
+    return pt_trans
+
+def gen_projection(origin_cam, new_cam, origin_verts):
+    point_origin = camera_trans_inv(origin_cam, origin_verts)
+    new_verts = camera_trans(new_cam, point_origin)
+    
+    return new_verts
 
 @MESH_ARCH_REGISTRY.register()
 class SphereInitHead(nn.Module):

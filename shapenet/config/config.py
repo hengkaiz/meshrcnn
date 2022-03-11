@@ -32,7 +32,7 @@ def get_shapenet_cfg():
     # The number of depth channels for the predicted voxels
     cfg.MODEL.VOXEL_HEAD.VOXEL_SIZE = 28
     cfg.MODEL.VOXEL_HEAD.LOSS_WEIGHT = 1.0
-    cfg.MODEL.VOXEL_HEAD.CUBIFY_THRESH = 0.0
+    cfg.MODEL.VOXEL_HEAD.CUBIFY_THRESH = 0.2
     # voxel only iterations
     cfg.MODEL.VOXEL_HEAD.VOXEL_ONLY_ITERS = 100
 
