@@ -1,22 +1,9 @@
-# Mesh R-CNN
-
-Code for the paper
-
-**[Mesh R-CNN][1]**  
-[Georgia Gkioxari][gg], Jitendra Malik, [Justin Johnson][jj]  
-ICCV 2019
-
-<div align="center">
-  <img src="https://gkioxari.github.io/teasers/meshrcnn_blog_video.gif" width="550px" />
-</div>
-
-&nbsp;
-
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1eQLZrNYRZMo9zdnGGccE0hFswGiinO-Z?usp=sharing)
-
-(thanks to [Alberto Tono][at]!)
+# Mesh R-CNN++
 
 ## Installation Requirements
+Mesh R-CNN++ is build onto of Mesh R-CNN,
+
+The following packages are needed:
 - [Detectron2][d2]
 - [PyTorch3D][py3d]
 
@@ -31,32 +18,39 @@ cd meshrcnn && pip install -e .
 
 ## Demo
 
-Run Mesh R-CNN on an input image
+### Generate Dataset
 
-```
-python demo/demo.py \
---config-file configs/pix3d/meshrcnn_R50_FPN.yaml \
---input /path/to/image \
---output output_demo \
---onlyhighest MODEL.WEIGHTS meshrcnn://meshrcnn_R50.pth
-```
-
-See [demo.py](demo/demo.py) for more details.
-
-## Running Experiments
-
-### Pix3D
-See [INSTRUCTIONS_PIX3D.md](INSTRUCTIONS_PIX3D.md) for more instructions.
-
-### ShapeNet
+Download ShapeNet Dataset
 See [INSTRUCTIONS_SHAPENET.md](INSTRUCTIONS_SHAPENET.md) for more instructions.
 
-## License
-The Mesh R-CNN codebase is released under [BSD-3-Clause License](LICENSE)
+Process ShapeNet Dataset for Mesh R-CNN++
+```
+python tools/gen_dataset.py
+```
 
-[1]: https://arxiv.org/abs/1906.02739
-[gg]: https://github.com/gkioxari
-[jj]: https://github.com/jcjohnson
-[d2]: https://github.com/facebookresearch/detectron2
-[py3d]: https://github.com/facebookresearch/pytorch3d
-[at]: https://github.com/albertotono
+### Run Mesh R-CNN++ with 2 input images
+
+Run Mesh Generation Stage
+
+```
+python demo/demo_shapenet.py --input final_eval_data \
+--config-file configs/shapenet/voxmesh_R50.yaml \
+MODEL.CHECKPOINT shapenet://voxmesh_R50.pth
+```
+Run Mesh Projection Stage
+
+```
+python tools/gen_intermediate_projection.py --input final_eval_data
+```
+
+Run Mesh Refinement Stage
+```
+python demo/demo_combine_shapenet.py --input final_eval_data/ \
+--config-file configs/shapenet/voxmesh_R50.yaml \
+MODEL.CHECKPOINT shapenet://voxmesh_R50.pth
+```
+
+Run evaluation
+```
+python demo/shapenet_eval.py --input final_eval_data/ --image-index 1
+```
