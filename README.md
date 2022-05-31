@@ -54,3 +54,6 @@ Run evaluation
 ```
 python demo/shapenet_eval.py --input final_eval_data/ --image-index 1
 ```
+
+[d2]: https://github.com/facebookresearch/detectron2
+[py3d]: https://github.com/facebookresearch/pytorch3d
